@@ -1,0 +1,112 @@
+const { v4: uuidv4 } = require('uuid');
+
+const prisma = require('../config/database');
+const AppError = require('../utils/appError');
+const logger = require('../utils/logger');
+
+const TRIGGER_TYPES = [
+  'whatsapp-receive', 'telegram-receive', 'webhook-trigger',
+  'schedule-trigger', 'email-receive',
+];
+
+const findTriggerNode = (nodes) =>
+  nodes.find((n) => TRIGGER_TYPES.some((t) => n.type && n.type.startsWith(t)));
+
+const lazyRequire = (mod) => {
+  try { return require(mod); } catch { return null; }
+};
+
+const activate = async (userId, workflowId) => {
+  const workflow = await prisma.workflow.findUnique({ where: { id: workflowId } });
+  if (!workflow) throw new AppError('Workflow not found', 404);
+  if (workflow.userId !== userId) throw new AppError('Not authorized', 403);
+
+  const version = await prisma.workflowVersion.findFirst({
+    where: { workflowId },
+    orderBy: { version: 'desc' },
+  });
+  if (!version) throw new AppError('No version found for workflow', 400);
+
+  const nodes = JSON.parse(version.nodesJson);
+  const triggerNode = findTriggerNode(nodes);
+  if (!triggerNode) throw new AppError('No trigger node found in workflow', 400);
+
+  const webhookPath = uuidv4();
+
+  await prisma.webhookRegistration.create({
+    data: { workflowId, path: webhookPath, triggerType: triggerNode.type, isActive: true },
+  });
+
+  await prisma.workflow.update({
+    where: { id: workflowId },
+    data: { isActive: true, webhookPath },
+  });
+
+  if (triggerNode.type.startsWith('schedule-trigger')) {
+    const cronExpression = triggerNode.data?.cronExpression || '* * * * *';
+    const scheduler = lazyRequire('./schedulerService');
+    if (scheduler) scheduler.schedule(workflowId, cronExpression, userId);
+  }
+
+  if (triggerNode.type.startsWith('email-receive')) {
+    const { credentialId, folder = 'INBOX' } = triggerNode.data || {};
+    const listener = lazyRequire('./listenerManager');
+    if (listener) listener.startEmailListener(workflowId, credentialId, folder, userId);
+  }
+
+  logger.info(`Workflow ${workflowId} activated with trigger: ${triggerNode.type}`);
+  return { webhookUrl: `/api/v1/webhook/${webhookPath}`, triggerType: triggerNode.type };
+};
+
+const deactivate = async (userId, workflowId) => {
+  const workflow = await prisma.workflow.findUnique({ where: { id: workflowId } });
+  if (!workflow) throw new AppError('Workflow not found', 404);
+  if (workflow.userId !== userId) throw new AppError('Not authorized', 403);
+
+  await prisma.webhookRegistration.updateMany({
+    where: { workflowId, isActive: true },
+    data: { isActive: false },
+  });
+
+  await prisma.workflow.update({
+    where: { id: workflowId },
+    data: { isActive: false },
+  });
+
+  const scheduler = lazyRequire('./schedulerService');
+  if (scheduler) scheduler.unschedule(workflowId);
+
+  const listener = lazyRequire('./listenerManager');
+  if (listener) listener.stopEmailListener(workflowId);
+
+  logger.info(`Workflow ${workflowId} deactivated`);
+};
+
+const handleWebhook = async (path, body, headers) => {
+  const registration = await prisma.webhookRegistration.findFirst({
+    where: { path, isActive: true },
+  });
+  if (!registration) throw new AppError('Webhook not found', 404);
+
+  const workflow = await prisma.workflow.findUnique({
+    where: { id: registration.workflowId },
+  });
+  if (!workflow) throw new AppError('Workflow not found', 404);
+
+  const version = await prisma.workflowVersion.findFirst({
+    where: { workflowId: workflow.id },
+    orderBy: { version: 'desc' },
+  });
+  const nodes = version ? JSON.parse(version.nodesJson) : [];
+  const triggerNode = findTriggerNode(nodes);
+  const triggerType = triggerNode ? triggerNode.type : 'webhook-trigger';
+
+  logger.info(`Webhook received for workflow ${workflow.id}, trigger: ${triggerType}`);
+
+  const workflowEngine = lazyRequire('./workflowEngine');
+  if (!workflowEngine) throw new AppError('Workflow engine not available', 500);
+
+  return workflowEngine.executeWorkflow(workflow.id, body, 'webhook', workflow.userId);
+};
+
+module.exports = { activate, deactivate, handleWebhook };
