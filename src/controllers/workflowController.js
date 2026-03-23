@@ -122,6 +122,72 @@ const deactivate = async (req, res, next) => {
   }
 };
 
+const chat = async (req, res, next) => {
+  try {
+    const { message, sessionId: sid } = req.body;
+    if (!message) {
+      return sendSuccess(res, null, 'Message is required', 400);
+    }
+
+    const workflow = await workflowService.getById(req.user.id, req.params.id);
+    const version = workflow.versions?.[0];
+    if (!version) {
+      return sendSuccess(res, null, 'No workflow version found', 400);
+    }
+
+    const nodes = typeof version.nodesJson === 'string'
+      ? JSON.parse(version.nodesJson) : version.nodesJson;
+    const agentNode = nodes.find((n) => {
+      const rt = n.data?.registryType || n.data?.nodeType?.type || n.type;
+      return rt === 'ai-agent';
+    });
+
+    if (!agentNode) {
+      return sendSuccess(res, null, 'No AI Agent node found in this workflow', 400);
+    }
+
+    const config = agentNode.data?.config || {};
+    if (!config.credentialId) {
+      return sendSuccess(res, null, 'AI Agent node has no credential configured. Open the node settings and select an AI credential.', 400);
+    }
+    if (!config.provider) {
+      return sendSuccess(res, null, 'AI Agent node has no provider selected. Open the node settings and choose a provider (e.g. groq, openai).', 400);
+    }
+
+    const { getNode } = require('../engine/nodes/nodeRegistry');
+    const credentialService = require('../services/credentialService');
+    const logger = require('../utils/logger');
+    const AIAgentClass = getNode('ai-agent');
+
+    const context = {
+      executionId: `chat-${Date.now()}`,
+      workflowId: workflow.id,
+      userId: req.user.id,
+      credentialService,
+      logger,
+    };
+
+    const handler = new AIAgentClass(config, context);
+    const inputData = {
+      from: sid || 'test-user',
+      sessionId: sid || 'test-user',
+      messageBody: message,
+      messageType: 'text',
+      platform: 'chat-test',
+    };
+
+    const result = await handler.execute(inputData);
+
+    sendSuccess(res, {
+      response: result.responseMessage || result.content || 'No response',
+      sessionId: result.sessionId,
+      toolsUsed: result.toolsUsed || [],
+    }, 'Chat response');
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   create,
   list,
@@ -134,4 +200,5 @@ module.exports = {
   execute,
   activate,
   deactivate,
+  chat,
 };

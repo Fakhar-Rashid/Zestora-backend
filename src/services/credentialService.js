@@ -40,7 +40,10 @@ const create = async (userId, { name, type, service, data }) => {
 
 const list = async (userId, service) => {
   const where = { userId };
-  if (service) where.service = service;
+  if (service) {
+    const services = Array.isArray(service) ? service : service.split(',');
+    where.service = services.length === 1 ? services[0] : { in: services };
+  }
   return prisma.credential.findMany({
     where,
     select: { id: true, name: true, type: true, service: true, createdAt: true },

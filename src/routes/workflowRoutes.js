@@ -233,4 +233,30 @@ router.put('/:id/activate', workflowController.activate);
  */
 router.put('/:id/deactivate', workflowController.deactivate);
 
+/**
+ * @swagger
+ * /workflows/{id}/chat:
+ *   post:
+ *     tags: [Workflows]
+ *     summary: Send a test chat message to a workflow with an AI Agent
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               message: { type: string }
+ *               sessionId: { type: string }
+ *     responses:
+ *       200: { description: Chat response from AI agent }
+ */
+router.post('/:id/chat', workflowController.chat);
+
 module.exports = router;
