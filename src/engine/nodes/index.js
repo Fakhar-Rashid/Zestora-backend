@@ -27,6 +27,7 @@ const SplitNode = require('./logic/splitNode');
 const CsvExport = require('./output/csvExport');
 const GoogleSheets = require('./output/googleSheets');
 const GoogleDocs = require('./output/googleDocs');
+const TextOutput = require('./output/textOutput');
 
 registerNode('manual-trigger', ManualTrigger);
 registerNode('whatsapp-receive', WhatsAppReceive);
@@ -55,7 +56,10 @@ registerNode('split', SplitNode);
 registerNode('csv-export', CsvExport);
 registerNode('google-sheets', GoogleSheets);
 registerNode('google-docs', GoogleDocs);
+registerNode('text-output', TextOutput);
 
 require('../tools/getCurrentTime');
 require('../tools/httpRequestTool');
 require('../tools/searchWeb');
+require('../tools/calculatorTool');
+require('../tools/textExtractTool');

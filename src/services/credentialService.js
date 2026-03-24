@@ -52,6 +52,9 @@ const list = async (userId, service) => {
 };
 
 const getById = async (userId, credentialId) => {
+  if (!credentialId) {
+    throw new AppError('No credential ID provided. Please configure a credential in the node settings.', 400);
+  }
   const credential = await prisma.credential.findUnique({
     where: { id: credentialId },
   });

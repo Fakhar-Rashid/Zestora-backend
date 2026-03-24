@@ -40,9 +40,25 @@ model Workflow {
   executions      Execution[]
   memories        ConversationMemory[]
   webhooks        WebhookRegistration[]
+  knowledgeEntries KnowledgeEntry[]
 
   @@index([userId])
   @@map("workflows")
+}
+
+model KnowledgeEntry {
+  id         String   @id @default(uuid())
+  workflowId String
+  title      String
+  content    String
+  category   String   @default("general")
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId])
+  @@map("knowledge_entries")
 }
 
 model WorkflowVersion {

@@ -8,16 +8,24 @@ registerTool('httpRequest', {
     properties: {
       url: { type: 'string', description: 'The URL to request' },
       method: { type: 'string', description: 'HTTP method', enum: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'] },
-      headers: { type: 'object', description: 'Request headers' },
+      headers: { type: 'string', description: 'Request headers as a JSON string, e.g. {"Authorization":"Bearer token"}' },
       body: { type: 'string', description: 'Request body (JSON string)' },
     },
     required: ['url'],
   },
-  execute: async ({ url, method = 'GET', headers = {}, body }) => {
-    const options = { method, headers };
+  execute: async ({ url, method = 'GET', headers, body }) => {
+    let parsedHeaders = {};
+    if (headers) {
+      try {
+        parsedHeaders = typeof headers === 'object' ? headers : JSON.parse(headers);
+      } catch {
+        parsedHeaders = {};
+      }
+    }
+    const options = { method, headers: parsedHeaders };
     if (body && method !== 'GET') {
       options.body = body;
-      if (!headers['Content-Type']) {
+      if (!parsedHeaders['Content-Type']) {
         options.headers['Content-Type'] = 'application/json';
       }
     }

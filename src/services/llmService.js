@@ -7,31 +7,26 @@ const DEFAULTS = {
   deepseek: 'deepseek-chat',
 };
 
-const chat = async ({ provider, apiKey, messages, tools, model }) => {
+const chat = async ({ provider, apiKey, messages, tools, model, temperature, maxTokens, responseFormat }) => {
   const resolvedModel = model || DEFAULTS[provider];
+  const opts = { apiKey, messages, tools, model: resolvedModel, temperature, maxTokens, responseFormat };
 
   switch (provider) {
     case 'openai':
-      return chatOpenAI({ apiKey, messages, tools, model: resolvedModel });
+      return chatOpenAI(opts);
 
     case 'gemini':
-      return chatGemini({ apiKey, messages, model: resolvedModel });
+      return chatGemini(opts);
 
     case 'groq':
       return chatOpenAI({
-        apiKey,
-        messages,
-        tools,
-        model: resolvedModel,
+        ...opts,
         baseURL: 'https://api.groq.com/openai/v1',
       });
 
     case 'deepseek':
       return chatOpenAI({
-        apiKey,
-        messages,
-        tools,
-        model: resolvedModel,
+        ...opts,
         baseURL: 'https://api.deepseek.com',
       });
 
