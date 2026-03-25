@@ -215,6 +215,7 @@ router.post('/:id/execute', workflowController.execute);
  *       200: { description: Workflow activated }
  */
 router.put('/:id/activate', workflowController.activate);
+router.post('/:id/activate', workflowController.activate);
 
 /**
  * @swagger
@@ -232,6 +233,7 @@ router.put('/:id/activate', workflowController.activate);
  *       200: { description: Workflow deactivated }
  */
 router.put('/:id/deactivate', workflowController.deactivate);
+router.post('/:id/deactivate', workflowController.deactivate);
 
 /**
  * @swagger
