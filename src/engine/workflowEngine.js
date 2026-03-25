@@ -64,8 +64,6 @@ const executeWorkflow = async (workflowId, triggerData, triggerType, userId) => 
     throw new AppError('Workflow must start with a trigger node (e.g. Manual Trigger)', 400);
   }
 
-  dataStore.set(triggerNode.id, triggerData);
-
   const context = { executionId: execution.id, workflowId, userId, credentialService, logger };
   let executionFailed = false;
 
@@ -80,20 +78,19 @@ const executeWorkflow = async (workflowId, triggerData, triggerType, userId) => 
       },
     });
 
+    let inputData = {};
+    
     if (triggerNode && node.id === triggerNode.id) {
-      await updateStep(step.id, {
-        status: STEP_STATUS.SUCCESS, outputData: triggerData,
-        completedAt: new Date(), durationMs: 0,
-      });
-      continue;
+      // For the first node, its input is the raw trigger data
+      inputData = triggerData;
+    } else {
+      const upstreamIds = getUpstreamNodeIds(nodeId, reverseAdj);
+      for (const uid of upstreamIds) {
+        if (dataStore.has(uid)) Object.assign(inputData, dataStore.get(uid));
+      }
     }
-
-    const upstreamIds = getUpstreamNodeIds(nodeId, reverseAdj);
-    const inputData = {};
-    for (const uid of upstreamIds) {
-      if (dataStore.has(uid)) Object.assign(inputData, dataStore.get(uid));
-    }
-    await updateStep(step.id, { inputData });
+    
+    await updateStep(step.id, { inputData: triggerNode && node.id === triggerNode.id ? { _rawTrigger: true } : inputData });
 
     const HandlerClass = getNode(nodeType);
     if (!HandlerClass) {

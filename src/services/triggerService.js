@@ -3,18 +3,14 @@ const { v4: uuidv4 } = require('uuid');
 const prisma = require('../config/database');
 const AppError = require('../utils/appError');
 const logger = require('../utils/logger');
-
-const TRIGGER_TYPES = [
-  'whatsapp-receive', 'telegram-receive', 'webhook-trigger',
-  'schedule-trigger', 'email-receive',
-];
-
-const findTriggerNode = (nodes) =>
-  nodes.find((n) => TRIGGER_TYPES.some((t) => n.type && n.type.startsWith(t)));
+const { findTriggerNode } = require('../engine/graphUtils');
 
 const lazyRequire = (mod) => {
   try { return require(mod); } catch { return null; }
 };
+
+const getRegistryType = (node) =>
+  node.data?.registryType || node.data?.nodeType?.type || node.type || '';
 
 const activate = async (userId, workflowId) => {
   const workflow = await prisma.workflow.findUnique({ where: { id: workflowId } });
@@ -27,14 +23,14 @@ const activate = async (userId, workflowId) => {
   });
   if (!version) throw new AppError('No version found for workflow', 400);
 
-  const nodes = JSON.parse(version.nodesJson);
+  const nodes = typeof version.nodesJson === 'string' ? JSON.parse(version.nodesJson) : version.nodesJson;
   const triggerNode = findTriggerNode(nodes);
   if (!triggerNode) throw new AppError('No trigger node found in workflow', 400);
 
   const webhookPath = uuidv4();
 
   await prisma.webhookRegistration.create({
-    data: { workflowId, path: webhookPath, triggerType: triggerNode.type, isActive: true },
+    data: { workflowId, path: webhookPath, isActive: true },
   });
 
   await prisma.workflow.update({
@@ -42,20 +38,55 @@ const activate = async (userId, workflowId) => {
     data: { isActive: true, webhookPath },
   });
 
-  if (triggerNode.type.startsWith('schedule-trigger')) {
+  const actualType = getRegistryType(triggerNode);
+
+  if (actualType.startsWith('schedule-trigger')) {
     const cronExpression = triggerNode.data?.cronExpression || '* * * * *';
     const scheduler = lazyRequire('./schedulerService');
     if (scheduler) scheduler.schedule(workflowId, cronExpression, userId);
   }
 
-  if (triggerNode.type.startsWith('email-receive')) {
+  if (actualType.startsWith('email-receive')) {
     const { credentialId, folder = 'INBOX' } = triggerNode.data || {};
     const listener = lazyRequire('./listenerManager');
     if (listener) listener.startEmailListener(workflowId, credentialId, folder, userId);
   }
 
-  logger.info(`Workflow ${workflowId} activated with trigger: ${triggerNode.type}`);
-  return { webhookUrl: `/api/v1/webhook/${webhookPath}`, triggerType: triggerNode.type };
+  if (actualType.startsWith('telegram-receive')) {
+    const config = triggerNode.data?.config || triggerNode.data || {};
+    const { credentialId } = config;
+    let botToken = null;
+
+    if (credentialId) {
+      try {
+        const credentialService = lazyRequire('./credentialService');
+        const credential = await credentialService.getDecrypted(userId, credentialId);
+        botToken = credential?.botToken;
+      } catch (err) {
+        logger.error(`[TelegramBot] Failed to decrypt credential for workflow ${workflowId}: ${err.message}`);
+      }
+    }
+
+    if (!botToken) {
+      const env = lazyRequire('./config/env');
+      botToken = env.telegramBotToken;
+      if (botToken) {
+        logger.info(`[TelegramBot] Falling back to .env TELEGRAM_BOT_TOKEN for workflow ${workflowId}`);
+      }
+    }
+
+    if (botToken) {
+      const telegramBotService = lazyRequire('./telegramBotService');
+      if (telegramBotService) {
+        await telegramBotService.startBot(workflowId, botToken, userId);
+      }
+    } else {
+      logger.warn(`[TelegramBot] No botToken found (neither in credential nor .env) for workflow ${workflowId}`);
+    }
+  }
+
+  logger.info(`Workflow ${workflowId} activated with trigger: ${actualType}`);
+  return { webhookUrl: `/api/v1/webhook/${webhookPath}`, triggerType: actualType };
 };
 
 const deactivate = async (userId, workflowId) => {
@@ -78,6 +109,9 @@ const deactivate = async (userId, workflowId) => {
 
   const listener = lazyRequire('./listenerManager');
   if (listener) listener.stopEmailListener(workflowId);
+
+  const telegramBotService = lazyRequire('./telegramBotService');
+  if (telegramBotService) telegramBotService.stopBot(workflowId);
 
   logger.info(`Workflow ${workflowId} deactivated`);
 };

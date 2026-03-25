@@ -56,7 +56,9 @@ class TelegramSend extends BaseNode {
     const resolvedMessage = resolveTemplate(messageBody, inputData);
 
     if (!resolvedChatId) {
-      throw new Error('Chat ID is required. Set "chatId" in config or ensure inputData contains "chatId".');
+      // Gracefully handle manual "Run" executions that do not supply a mock Telegram payload
+      console.warn('[TelegramSend] No Chat ID provided. If executing manually via the Run button, this is expected.');
+      return { success: false, reason: 'Chat ID is required (missing inputData.chatId). Workflow may have been manually executed without a payload.' };
     }
 
     const response = await fetch(

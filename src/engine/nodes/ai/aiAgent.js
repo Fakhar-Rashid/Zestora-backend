@@ -323,6 +323,7 @@ class AIAgent extends BaseNode {
         sessionId,
         platform: inputData.platform,
         from: inputData.from,
+        chatId: inputData.chatId,
         toolsUsed,
         memoryEnabled,
         knowledgeBaseUsed: !!this.context.workflowId,
@@ -337,6 +338,7 @@ class AIAgent extends BaseNode {
           sessionId: inputData.from || inputData.sessionId || 'error',
           platform: inputData.platform,
           from: inputData.from,
+          chatId: inputData.chatId,
           toolsUsed: [],
           error: err.message,
         };
