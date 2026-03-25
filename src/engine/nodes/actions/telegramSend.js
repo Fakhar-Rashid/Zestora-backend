@@ -53,7 +53,10 @@ class TelegramSend extends BaseNode {
       ? resolveTemplate(chatId, inputData)
       : inputData.chatId || null;
 
-    const resolvedMessage = resolveTemplate(messageBody, inputData);
+    let resolvedMessage = resolveTemplate(messageBody, inputData);
+    if (resolvedMessage.length > 4000) {
+      resolvedMessage = resolvedMessage.substring(0, 4000) + '\n\n... (truncated)';
+    }
 
     if (!resolvedChatId) {
       // Gracefully handle manual "Run" executions that do not supply a mock Telegram payload

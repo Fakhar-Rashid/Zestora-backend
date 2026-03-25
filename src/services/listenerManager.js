@@ -1,58 +1,107 @@
+const { ImapFlow } = require('imapflow');
+const { simpleParser } = require('mailparser');
+
 const logger = require('../utils/logger');
+const credentialService = require('./credentialService');
 
 const listeners = new Map();
 
-const startEmailListener = (workflowId, credentialId, folder, userId) => {
-  if (listeners.has(workflowId)) {
-    logger.warn(`Email listener already exists for workflow ${workflowId}, replacing`);
-    stopEmailListener(workflowId);
+const buildImapConfig = (cred) => ({
+  host: cred.host,
+  port: parseInt(cred.port, 10) || 993,
+  secure: cred.secure !== false,
+  auth: { user: cred.email || cred.user, pass: cred.password || cred.pass },
+  logger: false,
+});
+
+const pollOnce = async (imapConfig, folder, onEmail) => {
+  const client = new ImapFlow(imapConfig);
+  try {
+    await client.connect();
+    const lock = await client.getMailboxLock(folder);
+
+    try {
+      const since = new Date(Date.now() - 60 * 1000);
+      const uids = await client.search({ since, seen: false });
+
+      for (const uid of uids) {
+        const msg = await client.fetchOne(uid, { envelope: true, source: true });
+        if (!msg) continue;
+
+        const parsed = await simpleParser(msg.source);
+
+        const emailData = {
+          from: parsed.from?.text || '',
+          to: parsed.to?.text || '',
+          subject: parsed.subject || '',
+          date: parsed.date?.toISOString() || '',
+          body: (parsed.text || '').substring(0, 5000),
+          messageId: parsed.messageId || '',
+        };
+
+        await client.messageFlagsAdd(uid, ['\\Seen']);
+        onEmail(emailData);
+      }
+    } finally {
+      lock.release();
+    }
+
+    await client.logout();
+  } finally {
+    try { client.close(); } catch {}
   }
-
-  logger.info(`Starting email listener for workflow ${workflowId}`);
-  logger.info(`  credentialId: ${credentialId}, folder: ${folder || 'INBOX'}`);
-
-  // In production this would use imapflow to connect and listen for new emails.
-  // For now we store a stub entry so the rest of the system can track it.
-  const listenerInfo = {
-    workflowId,
-    credentialId,
-    folder: folder || 'INBOX',
-    userId,
-    active: true,
-    startedAt: new Date(),
-  };
-
-  listeners.set(workflowId, listenerInfo);
-  logger.info(`Email listener registered for workflow ${workflowId}`);
-
-  return listenerInfo;
 };
 
-const stopEmailListener = (workflowId) => {
-  const listener = listeners.get(workflowId);
-  if (!listener) {
-    logger.debug(`No email listener found for workflow ${workflowId}`);
-    return;
+const startEmailListener = async (workflowId, credentialId, folder, userId, onEmail) => {
+  if (listeners.has(workflowId)) {
+    await stopEmailListener(workflowId);
   }
 
-  // In production this would close the IMAP connection.
+  const cred = await credentialService.getDecrypted(userId, credentialId);
+  const imapConfig = buildImapConfig(cred);
+  const mailFolder = folder || 'INBOX';
+  let running = true;
+
+  const poll = async () => {
+    if (!running) return;
+    try {
+      await pollOnce(imapConfig, mailFolder, onEmail);
+    } catch (err) {
+      logger.error(`IMAP poll error for workflow ${workflowId}: ${err.message}`);
+    }
+    if (running) {
+      const timer = setTimeout(poll, 30000);
+      const entry = listeners.get(workflowId);
+      if (entry) entry.timer = timer;
+    }
+  };
+
+  listeners.set(workflowId, { workflowId, running: true, userId, startedAt: new Date() });
+  logger.info(`Email listener started for workflow ${workflowId} on ${mailFolder}`);
+
+  poll();
+};
+
+const stopEmailListener = async (workflowId) => {
+  const entry = listeners.get(workflowId);
+  if (!entry) return;
+
+  entry.running = false;
+  if (entry.timer) clearTimeout(entry.timer);
   listeners.delete(workflowId);
   logger.info(`Stopped email listener for workflow ${workflowId}`);
 };
 
 const getActiveListeners = () => {
-  const active = [];
-  for (const [workflowId, info] of listeners) {
-    active.push({ workflowId, ...info });
-  }
-  return active;
+  return Array.from(listeners.values()).map(({ workflowId, startedAt }) => ({
+    workflowId, startedAt,
+  }));
 };
 
-const stopAll = () => {
-  for (const [workflowId] of listeners) {
-    logger.info(`Stopping email listener for workflow ${workflowId}`);
+const stopAll = async () => {
+  for (const [id] of listeners) {
+    await stopEmailListener(id);
   }
-  listeners.clear();
   logger.info('All email listeners stopped');
 };
 

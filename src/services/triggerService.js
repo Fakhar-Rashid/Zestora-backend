@@ -47,9 +47,22 @@ const activate = async (userId, workflowId) => {
   }
 
   if (actualType.startsWith('email-receive')) {
-    const { credentialId, folder = 'INBOX' } = triggerNode.data || {};
-    const listener = lazyRequire('./listenerManager');
-    if (listener) listener.startEmailListener(workflowId, credentialId, folder, userId);
+    const config = triggerNode.data?.config || triggerNode.data || {};
+    const { credentialId, folder = 'INBOX' } = config;
+    if (credentialId) {
+      const listener = lazyRequire('./listenerManager');
+      const engine = lazyRequire('../engine/workflowEngine');
+      if (listener && engine) {
+        const onEmail = (emailData) => {
+          logger.info(`Email received for workflow ${workflowId}: ${emailData.subject}`);
+          engine.executeWorkflow(workflowId, emailData, 'email', userId)
+            .catch((err) => logger.error(`Email trigger execution error: ${err.message}`));
+        };
+        listener.startEmailListener(workflowId, credentialId, folder, userId, onEmail);
+      }
+    } else {
+      logger.warn(`Email trigger has no credential configured for workflow ${workflowId}`);
+    }
   }
 
   if (actualType.startsWith('telegram-receive')) {
