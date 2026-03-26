@@ -258,6 +258,14 @@ class AIAgent extends BaseNode {
         }
       }
 
+      // OpenAI-compatible `response_format: json_object` requires the prompt
+      // to explicitly ask for JSON. We enforce it here so JSON mode won't 400.
+      if (responseFormat === 'json' && !fullSystemPrompt.includes('JSON')) {
+        fullSystemPrompt +=
+          '\n\nIMPORTANT: Return a valid JSON object only. ' +
+          'Do not include markdown, code fences, or any extra text outside the JSON.';
+      }
+
       const messages = [{ role: 'system', content: fullSystemPrompt }];
 
       // ── 4. Load conversation memory ──
