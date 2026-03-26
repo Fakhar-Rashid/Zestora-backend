@@ -20,7 +20,7 @@ class AISummarize extends BaseNode {
         { key: 'credentialId', type: 'credential', service: ['openai', 'gemini', 'groq', 'deepseek'], label: 'AI Credential', required: true },
         { key: 'provider', type: 'select', label: 'Provider', options: ['openai', 'gemini', 'groq', 'deepseek'], required: true },
         { key: 'model', type: 'string', label: 'Model (optional)' },
-        { key: 'prompt', type: 'textarea', label: 'Summarization Prompt', default: 'Summarize the following content concisely:' },
+        { key: 'prompt', type: 'textarea', label: 'Summarization Prompt', default: 'You are a concise summarizer. Summarize the following content in 2-3 short bullet points. Focus only on the key information, action items, and important details. Skip greetings, signatures, and filler. Be direct.' },
       ],
     };
   }
@@ -94,7 +94,7 @@ class AISummarize extends BaseNode {
       throw new Error('Credential has no API key. Please update the credential with a valid API key.');
     }
 
-    const systemPrompt = prompt || 'Summarize the following content concisely:';
+    const systemPrompt = prompt || 'You are a concise summarizer. Summarize the following content in 2-3 short bullet points. Focus only on the key information, action items, and important details. Skip greetings, signatures, and filler. Be direct.';
     const contentToSummarize = this.extractContent(inputData);
     if (!contentToSummarize.trim()) {
       throw new Error('AI Summarize: nothing to summarize. Connect a node that provides `content`/`text` or similar fields.');
@@ -110,12 +110,12 @@ class AISummarize extends BaseNode {
 
     // Provide multiple compatible keys so downstream nodes (especially `text-output`) display correctly.
     return {
+      ...inputData,
       summary,
       responseMessage: summary,
       content: summary,
       text: summary,
       displayText: summary,
-      originalData: inputData,
     };
   }
 }

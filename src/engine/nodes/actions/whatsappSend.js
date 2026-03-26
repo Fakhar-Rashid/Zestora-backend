@@ -43,6 +43,15 @@ class WhatsAppSend extends BaseNode {
           type: 'textarea',
           label: 'Message Text',
           required: true,
+          variables: [
+            { name: 'from', hint: 'Sender (email/phone)' },
+            { name: 'to', hint: 'Recipient' },
+            { name: 'subject', hint: 'Email subject' },
+            { name: 'body', hint: 'Raw message body' },
+            { name: 'summary', hint: 'AI summary (if connected)' },
+            { name: 'responseMessage', hint: 'AI agent response' },
+            { name: 'date', hint: 'Message date' },
+          ],
         },
       ],
     };
