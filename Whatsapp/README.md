@@ -1,5 +1,8 @@
 # 🤖 WhatsApp Smart Chatbot
 
+<!-- PORT=3000 -->
+
+
 A clean, modular, production-ready WhatsApp chatbot built with **whatsapp-web.js** that responds intelligently using a knowledge base and AI-style prompt logic.
 
 ---
