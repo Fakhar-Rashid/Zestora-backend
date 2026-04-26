@@ -23,6 +23,4 @@ module.exports = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   encryptionKey: process.env.ENCRYPTION_KEY,
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173',
-  whatsappVerifyToken: process.env.WHATSAPP_VERIFY_TOKEN || '',
-  whatsappAppSecret: process.env.WHATSAPP_APP_SECRET || '',
 };

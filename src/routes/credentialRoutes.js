@@ -117,4 +117,8 @@ router.put('/:id', validate(updateSchema), credentialController.update);
  */
 router.delete('/:id', credentialController.remove);
 
+router.post('/:id/whatsapp/connect', credentialController.whatsappConnect);
+router.get('/:id/whatsapp/status', credentialController.whatsappStatus);
+router.post('/:id/whatsapp/disconnect', credentialController.whatsappDisconnect);
+
 module.exports = router;

@@ -65,6 +65,25 @@ const activate = async (userId, workflowId) => {
     }
   }
 
+  if (actualType.startsWith('whatsapp-receive')) {
+    const config = triggerNode.data?.config || triggerNode.data || {};
+    const { credentialId } = config;
+    if (credentialId) {
+      const wam = lazyRequire('./whatsappClientManager');
+      const engine = lazyRequire('../engine/workflowEngine');
+      if (wam && engine) {
+        const onMessage = (data) => {
+          logger.info(`[WhatsApp] message for workflow ${workflowId} from ${data.from}`);
+          engine.executeWorkflow(workflowId, data, 'whatsapp', userId)
+            .catch((err) => logger.error(`WhatsApp trigger execution error: ${err.message}`));
+        };
+        await wam.registerWorkflow(credentialId, workflowId, onMessage);
+      }
+    } else {
+      logger.warn(`WhatsApp trigger has no credential configured for workflow ${workflowId}`);
+    }
+  }
+
   if (actualType.startsWith('telegram-receive')) {
     const config = triggerNode.data?.config || triggerNode.data || {};
     const { credentialId } = config;
@@ -125,6 +144,23 @@ const deactivate = async (userId, workflowId) => {
 
   const telegramBotService = lazyRequire('./telegramBotService');
   if (telegramBotService) telegramBotService.stopBot(workflowId);
+
+  const wam = lazyRequire('./whatsappClientManager');
+  if (wam) {
+    const version = await prisma.workflowVersion.findFirst({
+      where: { workflowId },
+      orderBy: { version: 'desc' },
+    });
+    if (version) {
+      const nodes = typeof version.nodesJson === 'string' ? JSON.parse(version.nodesJson) : version.nodesJson;
+      const trigger = findTriggerNode(nodes);
+      const triggerType = trigger ? getRegistryType(trigger) : '';
+      if (triggerType.startsWith('whatsapp-receive')) {
+        const credentialId = trigger?.data?.config?.credentialId || trigger?.data?.credentialId;
+        if (credentialId) await wam.unregisterWorkflow(credentialId, workflowId);
+      }
+    }
+  }
 
   logger.info(`Workflow ${workflowId} deactivated`);
 };

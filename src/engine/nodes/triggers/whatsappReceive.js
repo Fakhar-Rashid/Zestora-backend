@@ -7,7 +7,7 @@ class WhatsAppReceive extends BaseNode {
       category: 'triggers',
       icon: 'message-circle',
       color: '#25D366',
-      description: 'Trigger workflow when a WhatsApp message is received',
+      description: 'Trigger workflow when a message arrives on your linked WhatsApp account',
       inputs: 0,
       outputs: 1,
     };
@@ -20,7 +20,7 @@ class WhatsAppReceive extends BaseNode {
           key: 'credentialId',
           type: 'credential',
           service: 'whatsapp',
-          label: 'WhatsApp Credential',
+          label: 'WhatsApp Account',
           required: true,
         },
       ],
@@ -28,34 +28,13 @@ class WhatsAppReceive extends BaseNode {
   }
 
   async execute(inputData) {
-    const payload = inputData || {};
-
-    const entry = payload.entry;
-    if (!entry || !entry.length) {
-      return { from: null, messageBody: null, messageType: null, timestamp: null, platform: 'whatsapp', rawPayload: payload };
-    }
-
-    const changes = entry[0].changes;
-    if (!changes || !changes.length) {
-      return { from: null, messageBody: null, messageType: null, timestamp: null, platform: 'whatsapp', rawPayload: payload };
-    }
-
-    const value = changes[0].value || {};
-    const messages = value.messages;
-
-    if (!messages || !messages.length) {
-      return { from: null, messageBody: null, messageType: null, timestamp: null, platform: 'whatsapp', rawPayload: payload };
-    }
-
-    const message = messages[0];
-
+    const data = inputData || {};
     return {
-      from: message.from || null,
-      messageBody: message.text?.body || message.caption || null,
-      messageType: message.type || null,
-      timestamp: message.timestamp ? new Date(Number(message.timestamp) * 1000).toISOString() : null,
+      from: data.from || null,
+      messageBody: data.messageBody || null,
+      messageType: data.messageType || null,
+      timestamp: data.timestamp || null,
       platform: 'whatsapp',
-      rawPayload: payload,
     };
   }
 }

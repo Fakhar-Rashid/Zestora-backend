@@ -1,14 +1,6 @@
 const BaseNode = require('../baseNode');
-
-/**
- * Replace {{key}} placeholders in a template string with values from data.
- */
-function resolveTemplate(template, data) {
-  if (!template) return '';
-  return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
-    return data[key] !== undefined ? String(data[key]) : match;
-  });
-}
+const { resolveTemplate } = require('../utils/resolveTemplate');
+const whatsappClientManager = require('../../../services/whatsappClientManager');
 
 class WhatsAppSend extends BaseNode {
   static getMeta() {
@@ -17,7 +9,7 @@ class WhatsAppSend extends BaseNode {
       category: 'actions',
       icon: 'message-circle',
       color: '#25D366',
-      description: 'Send a WhatsApp message via the Cloud API',
+      description: 'Send a WhatsApp message via your linked WhatsApp account',
       inputs: 1,
       outputs: 1,
     };
@@ -30,13 +22,15 @@ class WhatsAppSend extends BaseNode {
           key: 'credentialId',
           type: 'credential',
           service: 'whatsapp',
-          label: 'WhatsApp Credential',
+          label: 'WhatsApp Account',
           required: true,
         },
         {
           key: 'to',
           type: 'string',
           label: 'Recipient Phone Number',
+          placeholder: 'Leave blank to reply to incoming sender',
+          description: 'Format: 923001234567 (no +). Leave blank to reply to {{from}}.',
         },
         {
           key: 'messageBody',
@@ -44,10 +38,11 @@ class WhatsAppSend extends BaseNode {
           label: 'Message Text',
           required: true,
           variables: [
-            { name: 'from', hint: 'Sender (email/phone)' },
+            { name: 'from', hint: 'Sender phone number' },
             { name: 'to', hint: 'Recipient' },
+            { name: 'messageBody', hint: 'Original message body' },
             { name: 'subject', hint: 'Email subject' },
-            { name: 'body', hint: 'Raw message body' },
+            { name: 'body', hint: 'Raw body' },
             { name: 'summary', hint: 'AI summary (if connected)' },
             { name: 'responseMessage', hint: 'AI agent response' },
             { name: 'date', hint: 'Message date' },
@@ -60,53 +55,25 @@ class WhatsAppSend extends BaseNode {
   async execute(inputData) {
     const { credentialId, to, messageBody } = this.config;
 
-    const credential = await this.context.credentialService.getDecrypted(
-      this.context.userId,
-      credentialId,
-    );
-
-    const { phoneNumberId, accessToken } = credential;
+    if (!credentialId) {
+      throw new Error('WhatsApp Send has no credential configured. Connect a WhatsApp account in Settings and select it here.');
+    }
 
     const resolvedTo = to
       ? resolveTemplate(to, inputData)
       : inputData.from || null;
 
-    const resolvedMessage = resolveTemplate(messageBody, inputData);
-
     if (!resolvedTo) {
       throw new Error('Recipient phone number is required. Set "to" in config or ensure inputData contains "from".');
     }
 
-    const response = await fetch(
-      `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          to: resolvedTo,
-          type: 'text',
-          text: { body: resolvedMessage },
-        }),
-      },
-    );
-
-    const responseData = await response.json();
-
-    if (!response.ok) {
-      throw new Error(`WhatsApp API error: ${JSON.stringify(responseData)}`);
+    const resolvedMessage = resolveTemplate(messageBody, inputData);
+    if (!resolvedMessage || !resolvedMessage.trim()) {
+      throw new Error('Message body is empty after template resolution.');
     }
 
-    return {
-      success: true,
-      to: resolvedTo,
-      messageId: responseData.messages?.[0]?.id || null,
-    };
+    return whatsappClientManager.sendMessage(credentialId, resolvedTo, resolvedMessage);
   }
 }
 
 module.exports = WhatsAppSend;
-module.exports.resolveTemplate = resolveTemplate;

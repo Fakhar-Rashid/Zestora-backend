@@ -1,48 +1,10 @@
 const { Router } = require('express');
 
-const env = require('../config/env');
 const { sendSuccess, sendError } = require('../utils/responseHelper');
 const logger = require('../utils/logger');
 const triggerService = require('../services/triggerService');
 
 const router = Router();
-
-/**
- * @swagger
- * /webhooks/{path}:
- *   get:
- *     tags: [Webhooks]
- *     summary: WhatsApp verification endpoint (hub.challenge)
- *     parameters:
- *       - in: path
- *         name: path
- *         required: true
- *         schema: { type: string }
- *       - in: query
- *         name: hub.mode
- *         schema: { type: string }
- *       - in: query
- *         name: hub.verify_token
- *         schema: { type: string }
- *       - in: query
- *         name: hub.challenge
- *         schema: { type: string }
- *     responses:
- *       200: { description: Verification successful }
- *       403: { description: Verification failed }
- */
-router.get('/:path', (req, res) => {
-  const mode = req.query['hub.mode'];
-  const token = req.query['hub.verify_token'];
-  const challenge = req.query['hub.challenge'];
-
-  if (mode === 'subscribe' && token === env.whatsappVerifyToken) {
-    logger.info(`WhatsApp verification successful for path: ${req.params.path}`);
-    return res.status(200).send(challenge);
-  }
-
-  return sendError(res, 'Webhook verification failed', 403);
-});
 
 /**
  * @swagger

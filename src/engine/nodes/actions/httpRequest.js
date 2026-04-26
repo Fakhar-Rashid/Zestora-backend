@@ -1,5 +1,5 @@
 const BaseNode = require('../baseNode');
-const { resolveTemplate } = require('./whatsappSend');
+const { resolveTemplate } = require('../utils/resolveTemplate');
 
 class HttpRequest extends BaseNode {
   static getMeta() {

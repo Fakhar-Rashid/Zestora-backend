@@ -1,0 +1,12 @@
+{
+  "watch": ["src"],
+  "ext": "js,json",
+  "ignore": [
+    "data/**/*",
+    ".wwebjs_auth/**/*",
+    ".wwebjs_cache/**/*",
+    "logs/**/*",
+    "node_modules/**/*",
+    "prisma/**/*"
+  ]
+}

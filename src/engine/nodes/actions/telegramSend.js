@@ -1,5 +1,5 @@
 const BaseNode = require('../baseNode');
-const { resolveTemplate } = require('./whatsappSend');
+const { resolveTemplate } = require('../utils/resolveTemplate');
 
 class TelegramSend extends BaseNode {
   static getMeta() {
