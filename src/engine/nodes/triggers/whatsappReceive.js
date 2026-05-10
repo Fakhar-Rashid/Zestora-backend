@@ -31,6 +31,7 @@ class WhatsAppReceive extends BaseNode {
     const data = inputData || {};
     return {
       from: data.from || null,
+      chatId: data.chatId || data.from || null,
       messageBody: data.messageBody || null,
       messageType: data.messageType || null,
       timestamp: data.timestamp || null,

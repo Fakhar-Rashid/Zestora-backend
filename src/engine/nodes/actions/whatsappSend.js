@@ -61,7 +61,7 @@ class WhatsAppSend extends BaseNode {
 
     const resolvedTo = to
       ? resolveTemplate(to, inputData)
-      : inputData.from || null;
+      : inputData.chatId || inputData.from || null;
 
     if (!resolvedTo) {
       throw new Error('Recipient phone number is required. Set "to" in config or ensure inputData contains "from".');

@@ -32,8 +32,12 @@ const dispatchMessage = (entry, msg) => {
   if (msg.from && msg.from.includes('@g.us')) return;
   if (msg.from === 'status@broadcast') return;
 
+  const rawFrom = msg.from || '';
+  const phoneOnly = rawFrom.replace(/@c\.us$|@lid$/, '');
+
   const payload = {
-    from: (msg.from || '').replace('@c.us', ''),
+    from: phoneOnly,
+    chatId: rawFrom,
     messageBody: msg.body || '',
     messageType: msg.type || 'text',
     timestamp: msg.timestamp ? new Date(msg.timestamp * 1000).toISOString() : new Date().toISOString(),
@@ -132,11 +136,27 @@ const sendMessage = async (credentialId, to, body) => {
   if (!entry || entry.status !== 'ready') {
     throw new Error(`WhatsApp client for credential ${credentialId} is not ready (status: ${entry?.status || 'disconnected'}). Connect the credential in Settings first.`);
   }
-  const digits = String(to).replace(/[^\d]/g, '');
-  if (!digits) throw new Error('Recipient phone number is empty.');
-  const chatId = `${digits}@c.us`;
+
+  const raw = String(to).trim();
+  if (!raw) throw new Error('Recipient is empty.');
+
+  let chatId;
+  if (raw.includes('@')) {
+    chatId = raw;
+  } else {
+    const digits = raw.replace(/[^\d]/g, '');
+    if (!digits) throw new Error('Recipient phone number contains no digits.');
+    try {
+      const resolved = await entry.client.getNumberId(digits);
+      chatId = resolved?._serialized || `${digits}@c.us`;
+    } catch (err) {
+      logger.warn(`[WhatsApp] getNumberId failed for ${digits}: ${err.message}`);
+      chatId = `${digits}@c.us`;
+    }
+  }
+
   const result = await entry.client.sendMessage(chatId, body);
-  return { success: true, to: digits, messageId: result?.id?._serialized || null };
+  return { success: true, to: chatId, messageId: result?.id?._serialized || null };
 };
 
 const disconnect = async (credentialId) => {
